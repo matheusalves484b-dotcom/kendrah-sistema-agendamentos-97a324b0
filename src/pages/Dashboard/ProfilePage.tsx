@@ -375,6 +375,50 @@ const ProfilePage = () => {
                 </form>
               </CardContent>
             </Card>
+
+            <Card className="border-destructive/50">
+              <CardHeader>
+                <CardTitle className="text-destructive flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5" />
+                  Zona de perigo
+                </CardTitle>
+                <CardDescription>
+                  Ações irreversíveis para sua conta.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" className="w-full sm:w-auto">
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Excluir minha conta
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Excluir conta permanentemente?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Todos os seus dados serão apagados: perfil, serviços, agendamentos, clientes e relatórios.
+                        Esta ação não pode ser desfeita.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => deleteAccountMutation.mutate()}
+                        disabled={deleteAccountMutation.isPending}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        {deleteAccountMutation.isPending && (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        )}
+                        Sim, excluir conta
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </CardContent>
+            </Card>
           </div>
         )}
       </div>
