@@ -56,7 +56,7 @@ const RegisterPage = () => {
         email: email.trim(),
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/dashboard`,
+          emailRedirectTo: `${window.location.origin}/instalar-app`,
           data: { name: name.trim() },
         },
       });

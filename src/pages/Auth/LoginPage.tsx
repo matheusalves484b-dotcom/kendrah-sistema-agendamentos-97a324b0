@@ -9,6 +9,8 @@ import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { fetchProviderProfile } from '@/hooks/useProfile';
+import { hasSeenInstallPrompt } from '@/lib/installPrompt';
+
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -65,8 +67,14 @@ const LoginPage = () => {
         description: "Você entrou na sua conta com sucesso",
       });
 
-      navigate(from, { replace: true });
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData.user?.id;
+      const firstAccess = userId ? !hasSeenInstallPrompt(userId) : false;
+      const isDefaultDestination = from === "/dashboard";
+
+      navigate(firstAccess && isDefaultDestination ? "/instalar-app" : from, { replace: true });
     } catch (error) {
+
       toast({
         title: "Erro ao fazer login",
         description: "Verifique suas credenciais e tente novamente",
