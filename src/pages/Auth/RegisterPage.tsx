@@ -83,7 +83,7 @@ const RegisterPage = () => {
       });
 
       if (sessionData.session) {
-        navigate("/dashboard", { replace: true });
+        navigate("/instalar-app", { replace: true });
       } else {
         navigate("/login", { replace: true });
       }
