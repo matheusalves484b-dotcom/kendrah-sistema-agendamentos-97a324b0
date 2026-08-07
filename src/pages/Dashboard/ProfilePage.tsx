@@ -380,7 +380,7 @@ const ProfilePage = () => {
               <CardHeader>
                 <CardTitle className="text-destructive flex items-center gap-2">
                   <AlertTriangle className="h-5 w-5" />
-                  Zona de perigo
+                  Excluir conta
                 </CardTitle>
                 <CardDescription>
                   Ações irreversíveis para sua conta.
