@@ -1,9 +1,19 @@
+import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Smartphone, Share2, PlusSquare, ArrowRight, Home, CheckCircle2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { markInstallPromptSeen } from '@/lib/installPrompt';
 
 const InstallInstructionsPage = () => {
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user?.id) markInstallPromptSeen(data.user.id);
+    });
+  }, []);
+
+
   return (
     <div className="min-h-screen flex flex-col justify-center items-center bg-kendrah-gray/30 p-4">
       <div className="mb-8 text-center">
