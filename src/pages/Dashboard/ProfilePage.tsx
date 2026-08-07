@@ -38,6 +38,7 @@ interface ProfileData {
 
 const ProfilePage = () => {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -128,6 +129,40 @@ const ProfilePage = () => {
     },
     onError: (error: Error) => {
       toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteAccountMutation = useMutation({
+    mutationFn: async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("Sessão expirada. Faça login novamente.");
+
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const response = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/delete-account`,
+        {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result.error || "Não foi possível excluir a conta.");
+      }
+      return result;
+    },
+    onSuccess: async () => {
+      queryClient.clear();
+      await supabase.auth.signOut();
+      toast({ title: "Conta excluída", description: "Sua conta e todos os dados foram removidos." });
+      navigate("/", { replace: true });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao excluir conta", description: error.message, variant: "destructive" });
     },
   });
 
