@@ -45,6 +45,8 @@ const SubscriptionPage = () => {
       if (error) throw error;
       return data as SubscriptionStatus;
     },
+    refetchOnWindowFocus: true,
+    refetchInterval: 60_000,
   });
 
   useEffect(() => {
