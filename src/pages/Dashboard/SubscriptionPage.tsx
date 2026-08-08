@@ -1,203 +1,225 @@
-
-import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { toast } from "@/components/ui/use-toast";
+import { useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { Check, Loader2, RefreshCw } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 import DashboardLayout from '@/components/Dashboard/DashboardLayout';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
-interface SubscriptionData {
-  name: string;
-  status: 'trial' | 'active' | 'expired';
-  trialDaysLeft?: number;
-  expiresAt?: Date;
-  price: string;
+interface SubscriptionStatus {
+  status: 'none' | 'trialing' | 'active' | 'past_due' | 'canceled';
+  subscribed: boolean;
+  current_period_end: string | null;
+  trial_end: string | null;
 }
 
+const features = [
+  'Agendamentos ilimitados',
+  'Cadastro e histórico de clientes',
+  'Relatório mensal automático (CSV e PDF)',
+  'Página pública de agendamento',
+  'Lembretes por WhatsApp',
+];
+
+const formatDate = (value: string | null) =>
+  value ? new Date(value).toLocaleDateString('pt-BR') : null;
+
 const SubscriptionPage = () => {
-  const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const { data, isLoading, isFetching, refetch } = useQuery<SubscriptionStatus>({
+    queryKey: ['subscription'],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke('check-subscription');
+      if (error) throw error;
+      return data as SubscriptionStatus;
+    },
+  });
 
   useEffect(() => {
-    // Simulate loading subscription data
-    // Replace with actual API call to get subscription data
-    setTimeout(() => {
-      // Mock subscription data - replace with API call
-      const mockSubscription: SubscriptionData = {
-        name: "Plano Mensal",
-        status: "trial", // or 'active', 'expired'
-        trialDaysLeft: 7,
-        price: "R$ 39,90",
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days from now
-      };
-      
-      setSubscription(mockSubscription);
-      setIsLoading(false);
-    }, 1000);
-  }, []);
+    const checkout = searchParams.get('checkout');
+    if (!checkout) return;
+    if (checkout === 'success') {
+      toast.success('Assinatura confirmada! Atualizando seus dados...');
+      queryClient.invalidateQueries({ queryKey: ['subscription'] });
+    } else {
+      toast.info('Checkout cancelado. Nada foi cobrado.');
+    }
+    searchParams.delete('checkout');
+    setSearchParams(searchParams, { replace: true });
+  }, [searchParams, setSearchParams, queryClient]);
 
-  const handleSubscribe = () => {
-    // In a real app, this would redirect to your payment processor
-    // For demo, we'll just show a success toast
-    toast({
-      title: "Redirecionando para pagamento",
-      description: "Você será redirecionado para a plataforma de pagamento."
-    });
-    
-    // Mock redirect to payment gateway
-    // window.location.href = 'https://payment-gateway.com/checkout/kendrah-subscription';
-    
-    // For demo, let's simulate a successful payment after 3 seconds
-    setTimeout(() => {
-      setSubscription(prev => prev ? {
-        ...prev,
-        status: 'active',
-        trialDaysLeft: undefined,
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days from now
-      } : null);
-      
-      toast({
-        title: "Assinatura ativada!",
-        description: "Sua assinatura foi ativada com sucesso.",
-        variant: "default",
-      });
-    }, 3000);
-  };
+  const checkout = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('create-checkout');
+      if (error) throw error;
+      if (!data?.url) throw new Error('Não foi possível iniciar o checkout');
+      return data.url as string;
+    },
+    onSuccess: (url) => {
+      window.open(url, '_blank');
+    },
+    onError: (error: Error) => toast.error(error.message || 'Erro ao iniciar o pagamento'),
+  });
 
-  const getStatusBadge = (status: string) => {
+  const portal = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('customer-portal');
+      if (error) throw error;
+      if (!data?.url) throw new Error('Não foi possível abrir o portal');
+      return data.url as string;
+    },
+    onSuccess: (url) => {
+      window.open(url, '_blank');
+    },
+    onError: (error: Error) => toast.error(error.message || 'Erro ao abrir o portal'),
+  });
+
+  const status = data?.status ?? 'none';
+
+  const statusBadge = () => {
     switch (status) {
       case 'active':
-        return <Badge className="bg-green-500">Ativa</Badge>;
-      case 'trial':
-        return <Badge className="bg-blue-500">Em teste</Badge>;
-      case 'expired':
-        return <Badge className="bg-red-500">Expirada</Badge>;
+        return <Badge>Ativa</Badge>;
+      case 'trialing':
+        return <Badge variant="secondary">Em teste</Badge>;
+      case 'past_due':
+        return <Badge variant="destructive">Pagamento pendente</Badge>;
+      case 'canceled':
+        return <Badge variant="destructive">Cancelada</Badge>;
       default:
-        return null;
+        return <Badge variant="outline">Sem assinatura</Badge>;
     }
   };
 
   return (
     <DashboardLayout>
-      <div className="p-4 sm:p-6">
-        <h1 className="text-2xl font-bold mb-6">Assinatura</h1>
-        
+      <div className="p-4 sm:p-6 max-w-2xl">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold">Assinatura</h1>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            aria-label="Atualizar status da assinatura"
+          >
+            <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+          </Button>
+        </div>
+
         {isLoading ? (
           <div className="flex justify-center items-center h-48">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-kendrah-purple"></div>
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
-        ) : subscription ? (
+        ) : (
           <Card>
             <CardHeader>
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between items-start gap-4">
                 <div>
-                  <CardTitle className="text-xl">{subscription.name}</CardTitle>
-                  <CardDescription className="text-lg font-medium mt-1">{subscription.price}/mês</CardDescription>
+                  <CardTitle className="text-xl">Plano Kendrah Mensal</CardTitle>
+                  <CardDescription className="text-lg font-medium mt-1">
+                    R$ 39,90/mês · 7 dias grátis
+                  </CardDescription>
                 </div>
-                {getStatusBadge(subscription.status)}
+                {statusBadge()}
               </div>
             </CardHeader>
-            <CardContent>
-              {subscription.status === 'trial' && subscription.trialDaysLeft && (
-                <div className="bg-kendrah-purple/10 p-4 rounded-md">
+
+            <CardContent className="space-y-6">
+              {status === 'trialing' && (
+                <div className="rounded-md bg-muted p-4">
                   <p className="font-medium">
-                    Seu período de teste termina em {subscription.trialDaysLeft} dias
+                    Teste gratuito até {formatDate(data?.trial_end) ?? '—'}
                   </p>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Assine agora para continuar utilizando todos os recursos
-                  </p>
-                </div>
-              )}
-              
-              {subscription.status === 'active' && subscription.expiresAt && (
-                <div className="bg-green-50 p-4 rounded-md">
-                  <p className="font-medium text-green-700">
-                    Sua assinatura está ativa até {subscription.expiresAt.toLocaleDateString('pt-BR')}
-                  </p>
-                  <p className="text-sm text-gray-600 mt-1">
-                    A renovação acontecerá automaticamente
+                  <p className="text-sm text-muted-foreground mt-1">
+                    A primeira cobrança acontece automaticamente no fim do período.
                   </p>
                 </div>
               )}
-              
-              {subscription.status === 'expired' && (
-                <div className="bg-red-50 p-4 rounded-md">
-                  <p className="font-medium text-red-700">
-                    Sua assinatura expirou
+
+              {status === 'active' && (
+                <div className="rounded-md bg-muted p-4">
+                  <p className="font-medium">
+                    Assinatura ativa até {formatDate(data?.current_period_end) ?? '—'}
                   </p>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Renove agora para continuar utilizando o sistema
+                  <p className="text-sm text-muted-foreground mt-1">
+                    A renovação é automática.
                   </p>
                 </div>
               )}
-              
-              <div className="mt-6">
-                <h3 className="font-medium mb-2">O que está incluso:</h3>
+
+              {status === 'past_due' && (
+                <div className="rounded-md bg-destructive/10 p-4">
+                  <p className="font-medium text-destructive">
+                    Não conseguimos processar seu último pagamento.
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Atualize a forma de pagamento no portal para manter o acesso.
+                  </p>
+                </div>
+              )}
+
+              {(status === 'none' || status === 'canceled') && (
+                <div className="rounded-md bg-muted p-4">
+                  <p className="font-medium">
+                    {status === 'canceled'
+                      ? 'Sua assinatura foi cancelada.'
+                      : 'Comece com 7 dias grátis.'}
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Você pode cancelar quando quiser, sem multa.
+                  </p>
+                </div>
+              )}
+
+              <div>
+                <h2 className="font-medium mb-2">O que está incluso</h2>
                 <ul className="space-y-2">
-                  <li className="flex items-center">
-                    <svg className="w-5 h-5 text-kendrah-purple mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path>
-                    </svg>
-                    Agendamentos ilimitados
-                  </li>
-                  <li className="flex items-center">
-                    <svg className="w-5 h-5 text-kendrah-purple mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path>
-                    </svg>
-                    Cadastro de clientes
-                  </li>
-                  <li className="flex items-center">
-                    <svg className="w-5 h-5 text-kendrah-purple mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path>
-                    </svg>
-                    Configuração de disponibilidade
-                  </li>
-                  <li className="flex items-center">
-                    <svg className="w-5 h-5 text-kendrah-purple mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path>
-                    </svg>
-                    Suporte por email
-                  </li>
+                  {features.map((feature) => (
+                    <li key={feature} className="flex items-center gap-2 text-sm">
+                      <Check className="h-4 w-4 text-primary shrink-0" />
+                      {feature}
+                    </li>
+                  ))}
                 </ul>
               </div>
             </CardContent>
-            <CardFooter>
-              {(subscription.status === 'trial' || subscription.status === 'expired') && (
-                <Button 
-                  className="w-full bg-kendrah-purple hover:bg-kendrah-purple/90" 
-                  onClick={handleSubscribe}
+
+            <CardFooter className="flex flex-col sm:flex-row gap-3">
+              {data?.subscribed || status === 'past_due' ? (
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => portal.mutate()}
+                  disabled={portal.isPending}
                 >
-                  {subscription.status === 'trial' ? 'Assinar agora' : 'Renovar assinatura'}
-                </Button>
-              )}
-              
-              {subscription.status === 'active' && (
-                <Button 
-                  variant="outline" 
-                  className="w-full border-kendrah-purple text-kendrah-purple hover:bg-kendrah-purple/10"
-                  onClick={() => {
-                    toast({
-                      title: "Gerenciando assinatura",
-                      description: "Você será redirecionado para o portal de gerenciamento."
-                    });
-                  }}
-                >
+                  {portal.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Gerenciar assinatura
+                </Button>
+              ) : (
+                <Button
+                  className="w-full"
+                  onClick={() => checkout.mutate()}
+                  disabled={checkout.isPending}
+                >
+                  {checkout.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {status === 'canceled' ? 'Reativar assinatura' : 'Assinar com 7 dias grátis'}
                 </Button>
               )}
             </CardFooter>
           </Card>
-        ) : (
-          <div className="text-center py-8">
-            <p className="text-lg text-gray-500">Não foi possível carregar os dados da assinatura.</p>
-            <Button 
-              className="mt-4 bg-kendrah-purple hover:bg-kendrah-purple/90"
-              onClick={() => setIsLoading(true)}
-            >
-              Tentar novamente
-            </Button>
-          </div>
         )}
       </div>
     </DashboardLayout>
