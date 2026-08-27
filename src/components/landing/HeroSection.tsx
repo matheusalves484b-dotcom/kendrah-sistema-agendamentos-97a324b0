@@ -47,7 +47,7 @@ const HeroSection = () => {
 
             <dl className="mt-12 grid max-w-lg grid-cols-3 gap-6 border-t border-white/15 pt-8">
               {[
-                { value: '+8h', label: 'economizadas por mês' },
+                { value: '+60 horas', label: 'economizadas por mês' },
                 { value: '‑42%', label: 'de faltas com lembretes' },
                 { value: '24/7', label: 'agenda aberta online' },
               ].map((stat) => (
